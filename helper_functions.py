@@ -73,7 +73,33 @@ def neighbor_joining(distances: np.ndarray, labels: list) -> Node:
     
     self.tree = Node()
 
-    raise NotImplementedError()
+    # 1. Based on the current distance matrix, calculate a matrix Q
+    Q = np.zeros_like(distances)
+    # 2. Find the pair of distinct nodes i and j (i≠j) for which Q(i,j) is  smallest.
+    n = distances.shape[0]
+    for i in range(n):
+        for j in range(n):
+            if i != j:
+                Q[i, j] = (n - 2) * distances[i, j] - distances[i, :].sum() - distances[j, :].sum()
+    i, j = np.unravel_index(np.argmin(Q + np.diag([np.inf] * n)), Q.shape)
+    # 3. Make a new node that joins the nodes i and j, and connect the new node to the central node.
+    k = Node()
+    k.left = Node(labels[i])
+    k.right = Node(labels[j])
+    # 4. Calculate the distance from each of the node in the pair to this new node.
+    k.left_distance = (distances[i, j] + (distances[i, :].sum() - distances[j, :].sum()) / (n - 2)) / 2
+    k.right_distance = distances[i, j] - k.left_distance
+    # 5. Calculate the distance from each of the nodes outside of this pair to the new node.
+    for m in range(n):
+        if m != i and m != j:
+            d = (distances[i, m] + distances[j, m] - distances[i, j]) / 2
+            # Here we would normally update the distance matrix with the new node
+            # But for now, we just calculate the distances to the new node
+    # 6. Repeat with new node and distances until convergence
+    
+
+    # raise NotImplementedError()
+    return self.tree
 
 
 def plot_nj_tree(tree: Node, ax: Axes = None, **kwargs) -> None:
