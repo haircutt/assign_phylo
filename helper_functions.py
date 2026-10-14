@@ -202,8 +202,8 @@ def plot_nj_tree(tree: Node, ax: Axes = None, **kwargs) -> None:
             return y
         # pink plot
         ax.plot(x, y, 'o', color="pink")
-        left_y = _plot_node(node.left, x + node.left_distance, y - 1) if node.left else y
-        right_y = _plot_node(node.right, x + node.right_distance, y + 1) if node.right else y
+        left_y = _plot_node(node.left, x + node.left_distance, y - 1)
+        right_y = _plot_node(node.right, x + node.right_distance, y + 1)
         ax.plot([x, x + node.left_distance], [y, left_y], color="black")
         ax.plot([x, x + node.right_distance], [y, right_y], color="black")
         return (left_y + right_y) / 2
