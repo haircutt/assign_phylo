@@ -70,36 +70,49 @@ def neighbor_joining(distances: np.ndarray, labels: list) -> Node:
         A root node of the neighbor joining tree.
 
     """
-    
-    self.tree = Node()
+    # the caller's distance matrix is never mutated + track of trees built so far for each row/column.
+    distances = distances.copy().astype(float)
+    nodes = [Node(label, None, 0.0, None, 0.0) for label in labels]
 
-    # 1. Based on the current distance matrix, calculate a matrix Q
-    Q = np.zeros_like(distances)
-    # 2. Find the pair of distinct nodes i and j (i≠j) for which Q(i,j) is  smallest.
-    n = distances.shape[0]
-    for i in range(n):
-        for j in range(n):
-            if i != j:
-                Q[i, j] = (n - 2) * distances[i, j] - distances[i, :].sum() - distances[j, :].sum()
-    i, j = np.unravel_index(np.argmin(Q + np.diag([np.inf] * n)), Q.shape)
-    # 3. Make a new node that joins the nodes i and j, and connect the new node to the central node.
-    k = Node()
-    k.left = Node(labels[i])
-    k.right = Node(labels[j])
-    # 4. Calculate the distance from each of the node in the pair to this new node.
-    k.left_distance = (distances[i, j] + (distances[i, :].sum() - distances[j, :].sum()) / (n - 2)) / 2
-    k.right_distance = distances[i, j] - k.left_distance
-    # 5. Calculate the distance from each of the nodes outside of this pair to the new node.
-    for m in range(n):
-        if m != i and m != j:
-            d = (distances[i, m] + distances[j, m] - distances[i, j]) / 2
-            # Here we would normally update the distance matrix with the new node
-            # But for now, we just calculate the distances to the new node
-    # 6. Repeat with new node and distances until convergence
-    
+    # Repeat joining the closest pair until only two clusters remain.
+    while len(nodes) > 2:
+        # Based on curr distance matrix, calculate matrix Q
+        n = distances.shape[0]
+        row_sums = distances.sum(axis=1)
+        Q = np.zeros_like(distances)
+        for i in range(n):
+            for j in range(n):
+                if i != j:
+                    Q[i, j] = (n - 2) * distances[i, j] - row_sums[i] - row_sums[j]
+        # Find pair of distinct nodes i and j (i≠j) for which Q(i,j) is smallest
+        i, j = np.unravel_index(np.argmin(Q + np.diag([np.inf] * n)), Q.shape)
+        # 3. new node that joins the nodes i and j + calc the distance from each of the nodes in the pair to this new node.
+        left_distance = (distances[i, j] + (row_sums[i] - row_sums[j]) / (n - 2)) / 2
+        right_distance = distances[i, j] - left_distance
+        new_node = Node(f"Internal-{i}-{j}", nodes[i], left_distance, nodes[j], right_distance)
+        # 5. Calculate distance from each of the nodes outside of this pair to the new node.
+        remaining = [m for m in range(n) if m != i and m != j]
+        new_distances_to_node = [
+            (distances[i, m] + distances[j, m] - distances[i, j]) / 2 for m in remaining
+        ]
 
-    # raise NotImplementedError()
-    return self.tree
+        # Build reduced distance matrix/node list with the new node appended at the end.
+        new_n = n - 1
+        new_distances = np.zeros((new_n, new_n))
+        for a_idx, a in enumerate(remaining):
+            for b_idx, b in enumerate(remaining):
+                new_distances[a_idx, b_idx] = distances[a, b]
+        for a_idx, d in enumerate(new_distances_to_node):
+            new_distances[a_idx, -1] = d
+            new_distances[-1, a_idx] = d
+
+        distances = new_distances
+        nodes = [nodes[m] for m in remaining] + [new_node]
+        # 6. Repeat w/ new node and distances until convergence (loop condition above)
+    final_distance = distances[0, 1]
+    tree = Node("ROOT", nodes[0], final_distance / 2, nodes[1], final_distance / 2)
+
+    return tree
 
 
 def plot_nj_tree(tree: Node, ax: Axes = None, **kwargs) -> None:
@@ -125,6 +138,22 @@ def plot_nj_tree(tree: Node, ax: Axes = None, **kwargs) -> None:
     >>> fig.savefig("example.png")
 
     """
+    if ax is None:
+        fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 8))
+
+    def _plot_node(node: Node, x: float, y: float) -> float:
+        if node.left is None and node.right is None:
+            ax.text(x, y, node.name, ha="right", va="center")
+            return y
+        left_y = _plot_node(node.left, x + node.left_distance, y - 1) if node.left else y
+        right_y = _plot_node(node.right, x + node.right_distance, y + 1) if node.right else y
+        ax.plot([x, x + node.left_distance], [y, left_y], color="black")
+        ax.plot([x, x + node.right_distance], [y, right_y], color="black")
+        return (left_y + right_y) / 2
+
+    _plot_node(tree, 0, 0)
+
+    ax.set_xlabel("Distance")
 
     return ax
 
