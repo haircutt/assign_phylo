@@ -140,11 +140,68 @@ def plot_nj_tree(tree: Node, ax: Axes = None, **kwargs) -> None:
     """
     if ax is None:
         fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 8))
+    """
+    function plot_nj_tree(tree, ax=None, **kwargs):
+    if ax is None:
+        ax = current matplotlib axes (plt.gca())
+
+    # --- Pass 1: compute x-coordinate (depth) for every node ---
+    # x(root) = 0
+    # x(child) = x(parent) + distance_to_child
+    assign_x(node, parent_x=0):
+        node.x = parent_x
+        if node.left is not None:
+            assign_x(node.left, parent_x + node.left_distance)
+        if node.right is not None:
+            assign_x(node.right, parent_x + node.right_distance)
+
+    # --- Pass 2: compute y-coordinate (vertical slot) for every node ---
+    # Leaves get sequential integers in left-to-right traversal order;
+    # internal nodes get the average of their children's y.
+    leaf_counter = 0
+    assign_y(node):
+        if node is a leaf (node.left is None and node.right is None):
+            node.y = leaf_counter
+            leaf_counter += 1
+            record (node.x, node.y, node.name) in leaf_labels   # for text labels
+        else:
+            assign_y(node.left)
+            assign_y(node.right)
+            node.y = (node.left.y + node.right.y) / 2
+
+    # --- Pass 3: draw the elbow connectors ---
+    draw_branches(node):
+        if node is a leaf:
+            return
+        # vertical connector at node's own x, spanning its two children's y's
+        ax.plot([node.x, node.x], [node.left.y, node.right.y], color="k")
+        # horizontal branch for each child: from node.x to child.x, at child.y
+        ax.plot([node.x, node.left.x], [node.left.y, node.left.y], color="k")
+        ax.plot([node.x, node.right.x], [node.right.y, node.right.y], color="k")
+        draw_branches(node.left)
+        draw_branches(node.right)
+
+    # --- Pass 4: cosmetics ---
+    # small stub line left of the root (purely decorative, e.g. root.x - 0.2 to root.x)
+    ax.plot([root.x - 0.2, root.x], [root.y, root.y], color="k")
+
+    # draw leaf name labels at their (x, y), offset slightly right
+    for (x, y, name) in leaf_labels:
+        ax.text(x, y, f"  {name}", va="center")
+
+    # hide top/right spines like the ground-truth plot does
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    return ax
+    """
 
     def _plot_node(node: Node, x: float, y: float) -> float:
         if node.left is None and node.right is None:
             ax.text(x, y, node.name, ha="right", va="center")
             return y
+        # pink plot
+        ax.plot(x, y, 'o', color="pink")
         left_y = _plot_node(node.left, x + node.left_distance, y - 1) if node.left else y
         right_y = _plot_node(node.right, x + node.right_distance, y + 1) if node.right else y
         ax.plot([x, x + node.left_distance], [y, left_y], color="black")
@@ -154,6 +211,11 @@ def plot_nj_tree(tree: Node, ax: Axes = None, **kwargs) -> None:
     _plot_node(tree, 0, 0)
 
     ax.set_xlabel("Distance")
+    ax.set_ylabel("Nodes")
+    ax.invert_yaxis()
+    ax.set_title("Neighbor Joining Tree")
+
+    
 
     return ax
 
