@@ -141,13 +141,18 @@ def plot_nj_tree(tree: Node, ax: Axes = None, **kwargs) -> None:
     if ax is None:
         fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 8))
 
+    # Optional {leaf_name: color} mapping (e.g. to highlight coronavirus
+    # genera) used to colour each leaf's label; defaults to black.
+    label_colors = kwargs.get("label_colors", {})
+
     next_leaf_y = [0]
 
     def _plot_node(node: Node, x: float) -> float:
         if node.left is None and node.right is None:
             y = next_leaf_y[0]
             next_leaf_y[0] += 1
-            ax.text(x, y, node.name, ha="left", va="center")
+            color = label_colors.get(node.name, "black")
+            ax.text(x, y, node.name, ha="left", va="center", color=color)
             return y
         left_y = _plot_node(node.left, x + node.left_distance)
         right_y = _plot_node(node.right, x + node.right_distance)
@@ -161,13 +166,27 @@ def plot_nj_tree(tree: Node, ax: Axes = None, **kwargs) -> None:
 
     _plot_node(tree, 0)
 
-    # Grow the figure with the number of leaves and widen the x-axis so that
-    # leaf labels have room to breathe and never overlap each other or get
-    # clipped at the right edge, regardless of the caller's figure size.
+    # Grow the figure with the number of leaves so leaf labels have room to
+    # breathe and never overlap each other, regardless of the caller's
+    # figure size.
     n_leaves = next_leaf_y[0]
     fig_width, fig_height = ax.figure.get_size_inches()
     ax.figure.set_size_inches(max(fig_width, 8), max(fig_height, n_leaves * 0.3))
     ax.margins(x=0.3)
+
+    # Measure the actual rendered width of the leaf labels (in data units)
+    # and extend the right x-limit so the longest label is never clipped,
+    # no matter how long the species names are.
+    ax.figure.canvas.draw()
+    renderer = ax.figure.canvas.get_renderer()
+    inv = ax.transData.inverted()
+    text_rights = [
+        inv.transform((txt.get_window_extent(renderer=renderer).x1, 0))[0]
+        for txt in ax.texts
+    ]
+    if text_rights:
+        xlim_left, xlim_right = ax.get_xlim()
+        ax.set_xlim(xlim_left, max(xlim_right, max(text_rights) * 1.02))
 
     ax.set_xlabel("Distance")
     ax.set_ylabel("Nodes")
