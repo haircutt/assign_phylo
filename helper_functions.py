@@ -96,7 +96,7 @@ def global_alignment_fast(seq1: str, seq2: str, scoring_function, gap_score: flo
         Second sequence to be aligned.
     scoring_function: Callable
     gap_score: float
-        Linear gap penalty (applied per inserted/deleted character).
+        Gap penalty for insertions/deletions.
 
     Returns
     -------
