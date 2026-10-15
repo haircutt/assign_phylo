@@ -4,6 +4,189 @@ from copy import deepcopy
 from matplotlib.axes import Axes
 
 
+def global_alignment(seq1: str, seq2: str, scoring_function) -> tuple:
+    """Global sequence alignment using the Needleman-Wunsch algorithm.
+
+    Indels are denoted with the "-" character.
+
+    Parameters
+    ----------
+    seq1: str
+        First sequence to be aligned.
+    seq2: str
+        Second sequence to be aligned.
+    scoring_function: Callable
+
+    Returns
+    -------
+    str
+        First aligned sequence.
+    str
+        Second aligned sequence.
+    float
+        Final score of the alignment.
+
+    Examples
+    --------
+    >>> global_alignment("abracadabra", "dabarakadara", lambda x, y: [-1, 1][x == y])
+    ('-ab-racadabra', 'dabarakada-ra', 5.0)
+
+    Other alignments are not possible.
+
+    """
+    gap_score = -1  # gap penalty for global alignment - should be adjustable
+    rows = len(seq1) + 1
+    columns = len(seq2) + 1
+    score_matrix = [[0] * columns for _ in range(rows)]
+
+    for i in range(1, rows):
+        score_matrix[i][0] = score_matrix[i - 1][0] + gap_score
+    for j in range(1, columns):
+        score_matrix[0][j] = score_matrix[0][j - 1] + gap_score
+
+    for i in range(1, rows):
+        for j in range(1, columns):
+            diagonal = score_matrix[i - 1][j - 1] + scoring_function(
+                seq1[i - 1], seq2[j - 1]
+            )
+            up = score_matrix[i - 1][j] + gap_score
+            left = score_matrix[i][j - 1] + gap_score
+            score_matrix[i][j] = max(diagonal, up, left)
+
+    aligned_seq1 = []
+    aligned_seq2 = []
+    i = len(seq1)
+    j = len(seq2)
+    while i > 0 or j > 0:
+        if (
+            i > 0
+            and j > 0
+            and score_matrix[i][j]
+            == score_matrix[i - 1][j - 1]
+            + scoring_function(seq1[i - 1], seq2[j - 1])
+        ):
+            aligned_seq1.append(seq1[i - 1])
+            aligned_seq2.append(seq2[j - 1])
+            i -= 1
+            j -= 1
+        elif i > 0 and score_matrix[i][j] == score_matrix[i - 1][j] + gap_score:
+            aligned_seq1.append(seq1[i - 1])
+            aligned_seq2.append("-")
+            i -= 1
+        else:
+            aligned_seq1.append("-")
+            aligned_seq2.append(seq2[j - 1])
+            j -= 1
+
+    return (
+        "".join(reversed(aligned_seq1)),
+        "".join(reversed(aligned_seq2)),
+        float(score_matrix[-1][-1]),
+    )
+
+
+def global_alignment_fast(seq1: str, seq2: str, scoring_function, gap_score: float = -1) -> tuple:
+    """Updated Needleman-Wunsch alignment to optimise time spent running in notebook.
+
+    Parameters
+    ----------
+    seq1: str
+        First sequence to be aligned.
+    seq2: str
+        Second sequence to be aligned.
+    scoring_function: Callable
+    gap_score: float
+        Linear gap penalty (applied per inserted/deleted character).
+
+    Returns
+    -------
+    str
+        First aligned sequence.
+    str
+        Second aligned sequence.
+    float
+        Final score of the alignment.
+
+    """
+    n, m = len(seq1), len(seq2)
+    alphabet = sorted(set(seq1) | set(seq2))
+    char_to_code = {c: k for k, c in enumerate(alphabet)}
+    score_lookup = np.array(
+        [[scoring_function(a, b) for b in alphabet] for a in alphabet], dtype=np.float64
+    )
+    seq1_codes = np.array([char_to_code[c] for c in seq1])
+    seq2_codes = np.array([char_to_code[c] for c in seq2])
+
+    traceback = np.zeros((n + 1, m), dtype=np.int8)
+    left_source = np.tile(np.arange(m, dtype=np.uint16), (n + 1, 1))
+
+    prev_row = (np.arange(m + 1) * gap_score).astype(np.float64)
+    col_idx = np.arange(m)
+
+    for i in range(1, n + 1):
+        match_scores = score_lookup[seq1_codes[i - 1], seq2_codes]
+        diag = prev_row[0:m] + match_scores
+        up = prev_row[1:m + 1] + gap_score
+        cand = np.maximum(diag, up)
+        from_diag = diag >= up
+        adj = cand - gap_score * col_idx
+        running_max = np.maximum.accumulate(adj)
+        marker = np.where(adj == running_max, col_idx, -1)
+        running_idx = np.maximum.accumulate(marker)
+
+        left_chain_val = running_max + gap_score * col_idx
+        use_left_chain = left_chain_val > cand
+
+        new_row = np.where(use_left_chain, left_chain_val, cand)
+
+        traceback[i] = np.where(use_left_chain, 2, np.where(from_diag, 0, 1)).astype(np.int8)
+        left_source[i] = np.where(use_left_chain, running_idx, col_idx)
+
+        new_row_full = np.empty(m + 1)
+        new_row_full[0] = prev_row[0] + gap_score
+        new_row_full[1:] = new_row
+        prev_row = new_row_full
+
+    final_score = prev_row[-1]
+
+    aligned_seq1 = []
+    aligned_seq2 = []
+    i, j = n, m
+    while i > 0 or j > 0:
+        if i == 0:
+            aligned_seq1.append("-")
+            aligned_seq2.append(seq2[j - 1])
+            j -= 1
+            continue
+        if j == 0:
+            aligned_seq1.append(seq1[i - 1])
+            aligned_seq2.append("-")
+            i -= 1
+            continue
+        direction = traceback[i, j - 1]
+        if direction == 0:
+            aligned_seq1.append(seq1[i - 1])
+            aligned_seq2.append(seq2[j - 1])
+            i -= 1
+            j -= 1
+        elif direction == 1:
+            aligned_seq1.append(seq1[i - 1])
+            aligned_seq2.append("-")
+            i -= 1
+        else:
+            src = int(left_source[i, j - 1])
+            for col in range(j - 1, src, -1):
+                aligned_seq1.append("-")
+                aligned_seq2.append(seq2[col])
+            j = src + 1
+
+    return (
+        "".join(reversed(aligned_seq1)),
+        "".join(reversed(aligned_seq2)),
+        float(final_score),
+    )
+
+
 class Node:
     def __init__(
         self,
