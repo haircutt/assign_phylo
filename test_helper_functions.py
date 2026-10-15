@@ -301,6 +301,14 @@ class TestPlottingDendrogram(unittest.TestCase):
 
         f.savefig("tests/test_plotting_dendrogram.png", dpi=400, bbox_inches="tight")
 
+def test_sort_children_by_leaves(self):
+        from helper_functions import sort_children_by_leaves, count_leaves
 
+        # Example test case
+        tree = self.tree_1  # Replace with an actual tree instance
+        sort_children_by_leaves(tree)
+        left_leaves = count_leaves(tree.left)
+        right_leaves = count_leaves(tree.right)
+        self.assertGreaterEqual(left_leaves, right_leaves)
 if __name__ == "__main__":
     unittest.main()

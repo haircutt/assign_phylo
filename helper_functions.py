@@ -147,7 +147,7 @@ def plot_nj_tree(tree: Node, ax: Axes = None, **kwargs) -> None:
         if node.left is None and node.right is None:
             y = next_leaf_y[0]
             next_leaf_y[0] += 1
-            ax.text(x, y, node.name, ha="right", va="center")
+            ax.text(x, y, node.name, ha="left", va="center")
             return y
         left_y = _plot_node(node.left, x + node.left_distance)
         right_y = _plot_node(node.right, x + node.right_distance)
@@ -159,7 +159,15 @@ def plot_nj_tree(tree: Node, ax: Axes = None, **kwargs) -> None:
         ax.plot([x, x], [left_y, right_y], color="black")
         return y
 
-    _plot_node(tree, 10)
+    _plot_node(tree, 0)
+
+    # Grow the figure with the number of leaves and widen the x-axis so that
+    # leaf labels have room to breathe and never overlap each other or get
+    # clipped at the right edge, regardless of the caller's figure size.
+    n_leaves = next_leaf_y[0]
+    fig_width, fig_height = ax.figure.get_size_inches()
+    ax.figure.set_size_inches(max(fig_width, 8), max(fig_height, n_leaves * 0.3))
+    ax.margins(x=0.3)
 
     ax.set_xlabel("Distance")
     ax.set_ylabel("Nodes")
@@ -261,7 +269,27 @@ def sort_children_by_leaves(tree: Node) -> None:
         The root node of the tree.
 
     """
-    raise NotImplementedError()
+    if tree is None:
+        return
+
+    if tree.left is not None:
+        sort_children_by_leaves(tree.left)
+    if tree.right is not None:
+        sort_children_by_leaves(tree.right)
+
+    left_leaves = count_leaves(tree.left) if tree.left is not None else 0
+    right_leaves = count_leaves(tree.right) if tree.right is not None else 0
+
+    if left_leaves < right_leaves:
+        tree.left, tree.right = tree.right, tree.left
+        tree.left_distance, tree.right_distance = tree.right_distance, tree.left_distance
+
+def count_leaves(node: Node) -> int:
+    if node is None:
+        return 0
+    if node.left is None and node.right is None:
+        return 1
+    return count_leaves(node.left) + count_leaves(node.right)
 
 
 def plot_nj_tree_radial(tree: Node, ax: Axes = None, **kwargs) -> None:
